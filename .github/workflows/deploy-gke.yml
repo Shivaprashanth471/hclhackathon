@@ -84,22 +84,22 @@ jobs:
         with:
           version: 'latest'
 
-      - name: Create/Update Image Pull Secrets (if needed)
-        run: |
-          # Create Docker registry secret if it doesn't exist
-          kubectl create secret docker-registry regcreds \
-            --docker-server=${{ env.ARTIFACT_REGISTRY }} \
-            --docker-username=oauth2accesstoken \
-            --docker-password="$(gcloud auth print-access-token)" \
-            --docker-email=not-used@example.com \
-            --dry-run=client -o yaml | kubectl apply -f -
+      # - name: Create/Update Image Pull Secrets (if needed)
+      #   run: |
+      #     # Create Docker registry secret if it doesn't exist
+      #     kubectl create secret docker-registry regcreds \
+      #       --docker-server=${{ env.ARTIFACT_REGISTRY }} \
+      #       --docker-username=oauth2accesstoken \
+      #       --docker-password="$(gcloud auth print-access-token)" \
+      #       --docker-email=not-used@example.com \
+      #       --dry-run=client -o yaml | kubectl apply -f -
           
-          kubectl create secret docker-registry servicesecret \
-            --docker-server=${{ env.ARTIFACT_REGISTRY }} \
-            --docker-username=oauth2accesstoken \
-            --docker-password="$(gcloud auth print-access-token)" \
-            --docker-email=not-used@example.com \
-            --dry-run=client -o yaml | kubectl apply -f -
+      #     kubectl create secret docker-registry servicesecret \
+      #       --docker-server=${{ env.ARTIFACT_REGISTRY }} \
+      #       --docker-username=oauth2accesstoken \
+      #       --docker-password="$(gcloud auth print-access-token)" \
+      #       --docker-email=not-used@example.com \
+      #       --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Deploy Application Service
         run: |
