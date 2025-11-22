@@ -73,11 +73,18 @@ jobs:
                      ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/patient-service:latest
           docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/patient-service:latest
 
-      - name: Get GKE Credentials
-        run: |
-          gcloud container clusters get-credentials ${{ env.GKE_CLUSTER_NAME }} \
-            --region ${{ env.GKE_REGION }} \
-            --project ${{ env.GCP_PROJECT_ID }}
+      # - name: Get GKE Credentials
+      #   run: |
+      #     gcloud container clusters get-credentials ${{ env.GKE_CLUSTER_NAME }} \
+      #       --region ${{ env.GKE_REGION }} \
+      #       --project ${{ env.GCP_PROJECT_ID }}
+
+      - name: Get GKE credentials
+        if: ${{ steps.service_changes.outputs.changes == 'true' }}
+        uses: google-github-actions/get-gke-credentials@v1.0.1
+        with:
+          cluster_name: "autopilot-cluster-1"
+          location: "us-central1"      
 
       - name: Install kubectl
         uses: azure/setup-kubectl@v3
