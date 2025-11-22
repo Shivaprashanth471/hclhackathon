@@ -13,10 +13,7 @@ spec:
     spec:
       containers:
       - name: application-service
-        image: 
-        envFrom:
-        - configMapRef:
-            name: orderservice-dev
+        image: asia-docker.pkg.dev/${GCP_PROJECT_ID}/hclhackathonshiva/application-service:${github.sha}
         env:
           - name: TZ
             value: "Asia/Kolkata"        

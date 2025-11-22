@@ -2,7 +2,11 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: patient-service
+  namespace: default
+  labels:
+    app: patient-service
 spec:
+  replicas: 2
   selector:
     matchLabels:
       app: patient-service
@@ -12,37 +16,27 @@ spec:
         app: patient-service
     spec:
       containers:
-      - name: patient-service
-        image: 
-        envFrom:
-        - configMapRef:
-            name: orderservice-dev
-        env:
-          - name: TZ
-            value: "Asia/Kolkata"        
-          - name: ENV
-            value: dev
-          - name: PORT
-            value: "80"
-        ports:
-          - containerPort: 80
-        resources:
-          limits:
-            cpu: "300m"
-            memory: "500Mi"
-          requests:
-            cpu: "200m"
-            memory: "200Mi"
+        - name: patient-service
+          image: asia-docker.pkg.dev/${GCP_PROJECT_ID}/hclhackathonshiva/patient-service:${github.sha}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80 # Change if your service runs on a different port
+          env:
+            - name: NODE_ENV
+              value: "Developmet"
       imagePullSecrets:
-      - name: regcreds            
+        - name: servicesecret
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: patient-service
+  namespace: default
 spec:
-  type: ClusterIP
-  ports:
-    - port: 80
   selector:
-    app: patient-service    
+    app: patient-service
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 3000 # same as containerPort
+  type: ClusterIP
