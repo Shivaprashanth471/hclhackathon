@@ -116,7 +116,7 @@ env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   GCP_REGION: asia
   ARTIFACT_REGISTRY: asia-docker.pkg.dev
-  REPOSITORY_NAME: hclhackathon
+  REPOSITORY_NAME: hclhackathonshiva
 
 jobs:
   check-changes:
