@@ -136,18 +136,45 @@ jobs:
 
       - name: Deploy Application Service
         run: |
+          # Substitute variables in the YAML file
           sed "s|\${GCP_PROJECT_ID}|${{ env.GCP_PROJECT_ID }}|g; s|\${github.sha}|${{ github.sha }}|g" \
-            Deploymentfiles/application-service-deployment.yaml | kubectl apply -n ${{ env.K8S_NAMESPACE }} -f -
+            Deploymentfiles/application-service-deployment.yaml > /tmp/application-service-deployment.yaml
+          
+          # Try to apply first
+          kubectl apply -f /tmp/application-service-deployment.yaml || {
+            # If apply fails due to immutable selector, delete and recreate
+            echo "Apply failed, checking if deployment exists with different selector..."
+            kubectl delete deployment application-service -n ${{ env.K8S_NAMESPACE }} --ignore-not-found=true
+            kubectl apply -f /tmp/application-service-deployment.yaml
+          }
 
       - name: Deploy Order Service
         run: |
+          # Substitute variables in the YAML file
           sed "s|\${GCP_PROJECT_ID}|${{ env.GCP_PROJECT_ID }}|g; s|\${github.sha}|${{ github.sha }}|g" \
-            Deploymentfiles/order-service-deployment.yaml | kubectl apply -n ${{ env.K8S_NAMESPACE }} -f -
+            Deploymentfiles/order-service-deployment.yaml > /tmp/order-service-deployment.yaml
+          
+          # Try to apply first
+          kubectl apply -f /tmp/order-service-deployment.yaml || {
+            # If apply fails due to immutable selector, delete and recreate
+            echo "Apply failed, checking if deployment exists with different selector..."
+            kubectl delete deployment order-service -n ${{ env.K8S_NAMESPACE }} --ignore-not-found=true
+            kubectl apply -f /tmp/order-service-deployment.yaml
+          }
 
       - name: Deploy Patient Service
         run: |
+          # Substitute variables in the YAML file
           sed "s|\${GCP_PROJECT_ID}|${{ env.GCP_PROJECT_ID }}|g; s|\${github.sha}|${{ github.sha }}|g" \
-            Deploymentfiles/patient-service.yaml | kubectl apply -n ${{ env.K8S_NAMESPACE }} -f -
+            Deploymentfiles/patient-service.yaml > /tmp/patient-service.yaml
+          
+          # Try to apply first
+          kubectl apply -f /tmp/patient-service.yaml || {
+            # If apply fails due to immutable selector, delete and recreate
+            echo "Apply failed, checking if deployment exists with different selector..."
+            kubectl delete deployment patient-service -n ${{ env.K8S_NAMESPACE }} --ignore-not-found=true
+            kubectl apply -f /tmp/patient-service.yaml
+          }
 
       - name: Verify Deployments
         run: |

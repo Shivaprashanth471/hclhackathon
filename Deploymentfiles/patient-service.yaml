@@ -36,7 +36,8 @@ spec:
   selector:
     app: patient-service
   ports:
-    - protocol: TCP
+    - name: http
+      protocol: TCP
       port: 80
-      targetPort: 3000 # same as containerPort
+      targetPort: 3000
   type: ClusterIP
