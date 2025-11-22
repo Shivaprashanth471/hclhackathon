@@ -1,0 +1,112 @@
+name: Build and Push Docker Images
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+env:
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+
+jobs:
+  check-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      patient: ${{ steps.filter.outputs.patient }}
+      application: ${{ steps.filter.outputs.application }}
+      order: ${{ steps.filter.outputs.order }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Check for changes
+        uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          filters: |
+            patient:
+              - 'patient-service/**'
+            application:
+              - 'application-service/**'
+            order:
+              - 'order-service/**'
+
+  build-patient:
+    needs: check-changes
+    if: needs.check-changes.outputs.patient == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push patient-service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./patient-service
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/patient-service:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-application:
+    needs: check-changes
+    if: needs.check-changes.outputs.application == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push application-service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./application-service
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/application-service:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-order:
+    needs: check-changes
+    if: needs.check-changes.outputs.order == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push order-service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./order-service
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/order-service:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
