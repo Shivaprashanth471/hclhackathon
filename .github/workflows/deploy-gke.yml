@@ -100,11 +100,12 @@ jobs:
           ACCESS_TOKEN=$(gcloud auth print-access-token)
           
           # Delete existing secrets if they exist to force update
-          kubectl delete secret regcreds --ignore-not-found=true -n ${{ env.K8S_NAMESPACE }}
+          kubectl delete secret serviceaccount --ignore-not-found=true -n ${{ env.K8S_NAMESPACE }}
           kubectl delete secret servicesecret --ignore-not-found=true -n ${{ env.K8S_NAMESPACE }}
+          kubectl delete secret regcreds --ignore-not-found=true -n ${{ env.K8S_NAMESPACE }}
           
-          # Create regcreds secret (used by application-service and order-service)
-          kubectl create secret docker-registry regcreds \
+          # Create serviceaccount secret (used by application-service and order-service)
+          kubectl create secret docker-registry serviceaccount \
             --docker-server=${{ env.ARTIFACT_REGISTRY }} \
             --docker-username=oauth2accesstoken \
             --docker-password="$ACCESS_TOKEN" \
@@ -124,7 +125,7 @@ jobs:
       - name: Verify Image Pull Secrets
         run: |
           echo "Checking image pull secrets..."
-          kubectl get secrets regcreds servicesecret -n ${{ env.K8S_NAMESPACE }}
+          kubectl get secrets serviceaccount servicesecret -n ${{ env.K8S_NAMESPACE }}
           
           # Test if we can authenticate to Artifact Registry
           echo "Verifying Artifact Registry access..."
@@ -142,9 +143,10 @@ jobs:
           
           # Try to apply first
           kubectl apply -f /tmp/application-service-deployment.yaml || {
-            # If apply fails due to immutable selector, delete and recreate
-            echo "Apply failed, checking if deployment exists with different selector..."
+            # If apply fails, delete both deployment and service, then recreate
+            echo "Apply failed, deleting and recreating resources..."
             kubectl delete deployment application-service -n ${{ env.K8S_NAMESPACE }} --ignore-not-found=true
+            kubectl delete service application-service -n ${{ env.K8S_NAMESPACE }} --ignore-not-found=true
             kubectl apply -f /tmp/application-service-deployment.yaml
           }
 
@@ -156,9 +158,10 @@ jobs:
           
           # Try to apply first
           kubectl apply -f /tmp/order-service-deployment.yaml || {
-            # If apply fails due to immutable selector, delete and recreate
-            echo "Apply failed, checking if deployment exists with different selector..."
+            # If apply fails, delete both deployment and service, then recreate
+            echo "Apply failed, deleting and recreating resources..."
             kubectl delete deployment order-service -n ${{ env.K8S_NAMESPACE }} --ignore-not-found=true
+            kubectl delete service order-service -n ${{ env.K8S_NAMESPACE }} --ignore-not-found=true
             kubectl apply -f /tmp/order-service-deployment.yaml
           }
 
@@ -170,9 +173,10 @@ jobs:
           
           # Try to apply first
           kubectl apply -f /tmp/patient-service.yaml || {
-            # If apply fails due to immutable selector, delete and recreate
-            echo "Apply failed, checking if deployment exists with different selector..."
+            # If apply fails, delete both deployment and service, then recreate
+            echo "Apply failed, deleting and recreating resources..."
             kubectl delete deployment patient-service -n ${{ env.K8S_NAMESPACE }} --ignore-not-found=true
+            kubectl delete service patient-service -n ${{ env.K8S_NAMESPACE }} --ignore-not-found=true
             kubectl apply -f /tmp/patient-service.yaml
           }
 
