@@ -12,6 +12,7 @@ env:
   GKE_REGION: us-central1
   ARTIFACT_REGISTRY: asia-docker.pkg.dev
   REPOSITORY_NAME: hclhackathonshiva
+  K8S_NAMESPACE: shiva
 
 jobs:
   build-and-deploy:
@@ -68,34 +69,91 @@ jobs:
         uses: google-github-actions/get-gke-credentials@v1.0.1
         with:
           cluster_name: "autopilot-cluster-1"
-          location: "us-central1"      
+          location: "us-central1"
 
       - name: Install kubectl
         uses: azure/setup-kubectl@v3
         with:
           version: 'latest'
 
+      - name: Create Namespace
+        run: |
+          kubectl create namespace ${{ env.K8S_NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
+          echo "Namespace ${{ env.K8S_NAMESPACE }} is ready"
+
+      - name: Grant Artifact Registry Access to GKE Service Account
+        run: |
+          # Get the GKE compute service account email (for Autopilot clusters)
+          # For Autopilot, nodes use a managed service account
+          # Grant Artifact Registry Reader role to the default compute service account
+          GKE_SA="${{ env.GCP_PROJECT_ID }}-compute@developer.gserviceaccount.com"
+          
+          echo "Granting Artifact Registry Reader role to compute service account..."
+          gcloud projects add-iam-policy-binding ${{ env.GCP_PROJECT_ID }} \
+            --member="serviceAccount:${GKE_SA}" \
+            --role="roles/artifactregistry.reader" \
+            --condition=None || echo "Note: Service account might already have permissions or may need manual setup for Autopilot"
+
+      - name: Create/Update Image Pull Secrets
+        run: |
+          # Get access token for Artifact Registry (valid for 1 hour)
+          ACCESS_TOKEN=$(gcloud auth print-access-token)
+          
+          # Delete existing secrets if they exist to force update
+          kubectl delete secret regcreds --ignore-not-found=true -n ${{ env.K8S_NAMESPACE }}
+          kubectl delete secret servicesecret --ignore-not-found=true -n ${{ env.K8S_NAMESPACE }}
+          
+          # Create regcreds secret (used by application-service and order-service)
+          kubectl create secret docker-registry regcreds \
+            --docker-server=${{ env.ARTIFACT_REGISTRY }} \
+            --docker-username=oauth2accesstoken \
+            --docker-password="$ACCESS_TOKEN" \
+            --docker-email=not-used@example.com \
+            --namespace=${{ env.K8S_NAMESPACE }}
+          
+          # Create servicesecret (used by patient-service)
+          kubectl create secret docker-registry servicesecret \
+            --docker-server=${{ env.ARTIFACT_REGISTRY }} \
+            --docker-username=oauth2accesstoken \
+            --docker-password="$ACCESS_TOKEN" \
+            --docker-email=not-used@example.com \
+            --namespace=${{ env.K8S_NAMESPACE }}
+          
+          echo "Image pull secrets created/updated successfully in namespace ${{ env.K8S_NAMESPACE }}"
+          
+      - name: Verify Image Pull Secrets
+        run: |
+          echo "Checking image pull secrets..."
+          kubectl get secrets regcreds servicesecret -n ${{ env.K8S_NAMESPACE }}
+          
+          # Test if we can authenticate to Artifact Registry
+          echo "Verifying Artifact Registry access..."
+          gcloud artifacts docker images list \
+            --repository=${{ env.REPOSITORY_NAME }} \
+            --location=asia \
+            --project=${{ env.GCP_PROJECT_ID }} \
+            --limit=1 || echo "Warning: Could not list images. Check service account permissions."
 
       - name: Deploy Application Service
         run: |
           sed "s|\${GCP_PROJECT_ID}|${{ env.GCP_PROJECT_ID }}|g; s|\${github.sha}|${{ github.sha }}|g" \
-            Deploymentfiles/application-service-deployment.yaml | kubectl apply -f -
+            Deploymentfiles/application-service-deployment.yaml | kubectl apply -n ${{ env.K8S_NAMESPACE }} -f -
 
       - name: Deploy Order Service
         run: |
           sed "s|\${GCP_PROJECT_ID}|${{ env.GCP_PROJECT_ID }}|g; s|\${github.sha}|${{ github.sha }}|g" \
-            Deploymentfiles/order-service-deployment.yaml | kubectl apply -f -
+            Deploymentfiles/order-service-deployment.yaml | kubectl apply -n ${{ env.K8S_NAMESPACE }} -f -
 
       - name: Deploy Patient Service
         run: |
           sed "s|\${GCP_PROJECT_ID}|${{ env.GCP_PROJECT_ID }}|g; s|\${github.sha}|${{ github.sha }}|g" \
-            Deploymentfiles/patient-service.yaml | kubectl apply -f -
+            Deploymentfiles/patient-service.yaml | kubectl apply -n ${{ env.K8S_NAMESPACE }} -f -
 
       - name: Verify Deployments
         run: |
-          kubectl get deployments
-          kubectl get services
-          kubectl rollout status deployment/application-service --timeout=5m || true
-          kubectl rollout status deployment/order-service --timeout=5m || true
-          kubectl rollout status deployment/patient-service --timeout=5m || true
+          kubectl get deployments -n ${{ env.K8S_NAMESPACE }}
+          kubectl get services -n ${{ env.K8S_NAMESPACE }}
+          kubectl rollout status deployment/application-service -n ${{ env.K8S_NAMESPACE }} --timeout=5m || true
+          kubectl rollout status deployment/order-service -n ${{ env.K8S_NAMESPACE }} --timeout=5m || true
+          kubectl rollout status deployment/patient-service -n ${{ env.K8S_NAMESPACE }} --timeout=5m || true
 
