@@ -46,41 +46,25 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and Push Application Service Image
-        working-directory: ./application-service
-        run: |
-          docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/application-service:${{ github.sha }} .
-          docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/application-service:${{ github.sha }}
-          docker tag ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/application-service:${{ github.sha }} \
-                     ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/application-service:latest
-          docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/application-service:latest
-
-      - name: Build and Push Order Service Image
-        working-directory: ./order-service
-        run: |
-          docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/order-service:${{ github.sha }} .
-          docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/order-service:${{ github.sha }}
-          docker tag ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/order-service:${{ github.sha }} \
-                     ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/order-service:latest
-          docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/order-service:latest
-
-      - name: Build and Push Patient Service Image
+      - name : build pattient service image
         working-directory: ./patient-service
         run: |
-          docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/patient-service:${{ github.sha }} .
-          docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/patient-service:${{ github.sha }}
-          docker tag ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/patient-service:${{ github.sha }} \
-                     ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/patient-service:latest
-          docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/patient-service:latest
+          docker build -t asia-docker.pkg.dev/flash-spot-478811-m2/hclhackathonshiva/patient-service:${{ github.sha }} .
+          docker push asia-docker.pkg.dev/flash-spot-478811-m2/hclhackathonshiva/patient-service:${{ github.sha }}
 
-      # - name: Get GKE Credentials
-      #   run: |
-      #     gcloud container clusters get-credentials ${{ env.GKE_CLUSTER_NAME }} \
-      #       --region ${{ env.GKE_REGION }} \
-      #       --project ${{ env.GCP_PROJECT_ID }}
+      - name : build application service image
+        working-directory: ./application-service
+        run: |
+          docker build -t asia-docker.pkg.dev/flash-spot-478811-m2/hclhackathonshiva/application-service:${{ github.sha }} .
+          docker push asia-docker.pkg.dev/flash-spot-478811-m2/hclhackathonshiva/application-service:${{ github.sha }}
+
+      - name : build order service image
+        working-directory: ./order-service
+        run: |
+          docker build -t asia-docker.pkg.dev/flash-spot-478811-m2/hclhackathonshiva/order-service:${{ github.sha }} .
+          docker push asia-docker.pkg.dev/flash-spot-478811-m2/hclhackathonshiva/order-service:${{ github.sha }}
 
       - name: Get GKE credentials
-        if: ${{ steps.service_changes.outputs.changes == 'true' }}
         uses: google-github-actions/get-gke-credentials@v1.0.1
         with:
           cluster_name: "autopilot-cluster-1"
@@ -91,22 +75,6 @@ jobs:
         with:
           version: 'latest'
 
-      # - name: Create/Update Image Pull Secrets (if needed)
-      #   run: |
-      #     # Create Docker registry secret if it doesn't exist
-      #     kubectl create secret docker-registry regcreds \
-      #       --docker-server=${{ env.ARTIFACT_REGISTRY }} \
-      #       --docker-username=oauth2accesstoken \
-      #       --docker-password="$(gcloud auth print-access-token)" \
-      #       --docker-email=not-used@example.com \
-      #       --dry-run=client -o yaml | kubectl apply -f -
-          
-      #     kubectl create secret docker-registry servicesecret \
-      #       --docker-server=${{ env.ARTIFACT_REGISTRY }} \
-      #       --docker-username=oauth2accesstoken \
-      #       --docker-password="$(gcloud auth print-access-token)" \
-      #       --docker-email=not-used@example.com \
-      #       --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Deploy Application Service
         run: |
