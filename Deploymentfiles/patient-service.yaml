@@ -25,7 +25,7 @@ spec:
             - name: NODE_ENV
               value: "Developmet"
       imagePullSecrets:
-        - name: regcreds
+        - name: servicesecret
 ---
 apiVersion: v1
 kind: Service
