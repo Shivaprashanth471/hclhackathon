@@ -1,0 +1,126 @@
+name: Build and Deploy to GKE
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  GCP_PROJECT_ID: flash-spot-478811-m2
+  GKE_CLUSTER_NAME: autopilot-cluster-1
+  GKE_REGION: us-central1
+  ARTIFACT_REGISTRY: asia-docker.pkg.dev
+  REPOSITORY_NAME: hclhackathonshiva
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          # Option 1: Use Workload Identity Federation (Recommended)
+          # Uncomment the next two lines and comment credentials_json if using WIF
+          # workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          # service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+          
+          # Option 2: Use Service Account JSON Key (Alternative)
+          # Uncomment the next line and comment WIF lines above if using SA key
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for GCR
+        run: |
+          gcloud auth configure-docker ${{ env.ARTIFACT_REGISTRY }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Push Application Service Image
+        working-directory: ./application-service
+        run: |
+          docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/application-service:${{ github.sha }} .
+          docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/application-service:${{ github.sha }}
+          docker tag ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/application-service:${{ github.sha }} \
+                     ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/application-service:latest
+          docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/application-service:latest
+
+      - name: Build and Push Order Service Image
+        working-directory: ./order-service
+        run: |
+          docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/order-service:${{ github.sha }} .
+          docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/order-service:${{ github.sha }}
+          docker tag ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/order-service:${{ github.sha }} \
+                     ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/order-service:latest
+          docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/order-service:latest
+
+      - name: Build and Push Patient Service Image
+        working-directory: ./patient-service
+        run: |
+          docker build -t ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/patient-service:${{ github.sha }} .
+          docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/patient-service:${{ github.sha }}
+          docker tag ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/patient-service:${{ github.sha }} \
+                     ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/patient-service:latest
+          docker push ${{ env.ARTIFACT_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY_NAME }}/patient-service:latest
+
+      - name: Get GKE Credentials
+        run: |
+          gcloud container clusters get-credentials ${{ env.GKE_CLUSTER_NAME }} \
+            --region ${{ env.GKE_REGION }} \
+            --project ${{ env.GCP_PROJECT_ID }}
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+
+      - name: Create/Update Image Pull Secrets (if needed)
+        run: |
+          # Create Docker registry secret if it doesn't exist
+          kubectl create secret docker-registry regcreds \
+            --docker-server=${{ env.ARTIFACT_REGISTRY }} \
+            --docker-username=oauth2accesstoken \
+            --docker-password="$(gcloud auth print-access-token)" \
+            --docker-email=not-used@example.com \
+            --dry-run=client -o yaml | kubectl apply -f -
+          
+          kubectl create secret docker-registry servicesecret \
+            --docker-server=${{ env.ARTIFACT_REGISTRY }} \
+            --docker-username=oauth2accesstoken \
+            --docker-password="$(gcloud auth print-access-token)" \
+            --docker-email=not-used@example.com \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy Application Service
+        run: |
+          sed "s|\${GCP_PROJECT_ID}|${{ env.GCP_PROJECT_ID }}|g; s|\${github.sha}|${{ github.sha }}|g" \
+            Deploymentfiles/application-service-deployment.yaml | kubectl apply -f -
+
+      - name: Deploy Order Service
+        run: |
+          sed "s|\${GCP_PROJECT_ID}|${{ env.GCP_PROJECT_ID }}|g; s|\${github.sha}|${{ github.sha }}|g" \
+            Deploymentfiles/order-service-deployment.yaml | kubectl apply -f -
+
+      - name: Deploy Patient Service
+        run: |
+          sed "s|\${GCP_PROJECT_ID}|${{ env.GCP_PROJECT_ID }}|g; s|\${github.sha}|${{ github.sha }}|g" \
+            Deploymentfiles/patient-service.yaml | kubectl apply -f -
+
+      - name: Verify Deployments
+        run: |
+          kubectl get deployments
+          kubectl get services
+          kubectl rollout status deployment/application-service --timeout=5m || true
+          kubectl rollout status deployment/order-service --timeout=5m || true
+          kubectl rollout status deployment/patient-service --timeout=5m || true
+
