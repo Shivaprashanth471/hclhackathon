@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: application-service
+spec:
+  selector:
+    matchLabels:
+      app: application-service
+  template:
+    metadata:
+      labels:
+        app: application-service
+    spec:
+      containers:
+      - name: application-service
+        image: 
+        envFrom:
+        - configMapRef:
+            name: orderservice-dev
+        env:
+          - name: TZ
+            value: "Asia/Kolkata"        
+          - name: ENV
+            value: dev
+          - name: PORT
+            value: "80"
+        ports:
+          - containerPort: 80
+        resources:
+          limits:
+            cpu: "300m"
+            memory: "500Mi"
+          requests:
+            cpu: "200m"
+            memory: "200Mi"
+      imagePullSecrets:
+      - name: regcreds            
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: application-service
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+  selector:
+    app: application-service    
